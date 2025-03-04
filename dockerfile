@@ -6,7 +6,7 @@ WORKDIR /app
 
 # 複製程式碼與 .env 檔案
 COPY app.py .
-COPY .env .
+# COPY .env .
 
 # 安裝 Flask 和 requests
 RUN pip install flask requests python-dotenv

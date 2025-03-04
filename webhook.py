@@ -1,30 +1,24 @@
 import os
 
 import requests
-from dotenv import load_dotenv
 from flask import Flask, jsonify, request
-
-# 載入 .env 檔案
-load_dotenv()
 
 app = Flask(__name__)
 
-# 讀取環境變數
+# 直接從 Render 的環境變數讀取
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_USER_ID = os.getenv("LINE_USER_ID")
 LINE_API_URL = "https://api.line.me/v2/bot/message/push"
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.json  # 接收 Webhook 資料
+    data = request.json
     print("Received Webhook:", data)
 
     # 發送 LINE 訊息
     line_message = {
         "to": LINE_USER_ID,
-        "messages": [
-            {"type": "text", "text": f"Webhook 通知：{data}"}
-        ]
+        "messages": [{"type": "text", "text": f"Webhook 通知：{data}"}]
     }
 
     headers = {
@@ -36,4 +30,4 @@ def webhook():
     return jsonify({"status": "ok", "line_response": response.json()})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
