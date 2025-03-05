@@ -1,6 +1,7 @@
-from flask import Flask, request, jsonify
-import requests
 import os
+
+import requests
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
@@ -14,25 +15,31 @@ def webhook():
     data = request.json  # 取得 Webhook JSON 資料
     print("Received Webhook:", data)  # 方便 Debug
 
-    # 確保 'message' 欄位存在，否則預設為 '未知通知'
-    message_text = data.get("message", "未知通知")
+    # 確保事件存在
+    if "events" in data:
+        for event in data["events"]:
+            # 如果是群組邀請事件 (join)
+            if event["type"] == "join" and event["source"]["type"] == "group":
+                group_id = event["source"]["groupId"]
+                message_text = f"機器人已加入群組，Group ID: {group_id}"  # 記錄 Group ID
 
-    # 建立 LINE 訊息
-    line_message = {
-        "to": LINE_USER_ID,
-        "messages": [
-            {"type": "text", "text": message_text}  # 只傳送 message 內容
-        ]
-    }
+                # 發送 Group ID 到你的個人 LINE
+                line_message = {
+                    "to": LINE_USER_ID,
+                    "messages": [
+                        {"type": "text", "text": message_text}  # 只傳送 message 內容
+                    ]
+                }
 
-    # 發送 LINE 訊息
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
-    }
-    response = requests.post(LINE_API_URL, json=line_message, headers=headers)
+                # 發送 LINE 訊息
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
+                }
+                response = requests.post(LINE_API_URL, json=line_message, headers=headers)
 
-    return jsonify({"status": "ok", "line_response": response.json()})
+                return jsonify({"status": "ok", "group_id": group_id, "line_response": response.json()})
 
+    return jsonify({"status": "no_valid_event"})  # 若沒有有效事件，回傳預設 JSON
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
