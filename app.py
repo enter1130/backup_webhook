@@ -1,47 +1,42 @@
 import os
 
 import requests
-from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
-# 讀取 Render 網址
-RENDER_URL = os.getenv("RENDER_URL", "https://你的-render-網址")
-
-# 定期 Ping 自己的函數
-def keep_alive():
-    try:
-        print("🔄 保持活動狀態：發送 /ping")
-        requests.get(f"{RENDER_URL}/ping")
-    except Exception as e:
-        print(f"⚠️ 無法發送 Keep Alive 請求: {e}")
-
-# 建立 APScheduler 排程器
-scheduler = BackgroundScheduler()
-scheduler.add_job(keep_alive, "interval", minutes=10)
-scheduler.start()
-
 # 讀取 LINE 設定
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
-# LINE_USER_ID = os.getenv("LINE_USER_ID")
-LINE_GROUP_ID = os.getenv("LINE_GROUP_ID")  # 這裡改成群組 ID
 LINE_API_URL = "https://api.line.me/v2/bot/message/push"
+
+# 全局變數存儲最新的 userId
+latest_user_id = None
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    global latest_user_id  # 允許修改全局變數
     data = request.json  # 取得 Webhook JSON 資料
     print("Received Webhook:", data)  # 方便 Debug
 
-    # 確保 'message' 欄位存在，否則預設為 '未知通知'
+    for event in data.get("events", []):
+        # ✅ 如果是 `follow` 事件（使用者加好友）
+        if event.get("type") == "follow" and event.get("source", {}).get("type") == "user":
+            latest_user_id = event["source"]["userId"]
+            print(f"✨ 獲取 `userId`: {latest_user_id}")
+            return jsonify({"message": f"✨ 獲取使用者 ID: {latest_user_id}"}), 200
+
+    # 如果是一般訊息推送，確保 `latest_user_id` 已經獲取
+    if latest_user_id is None:
+        return jsonify({"error": "❌ 無法發送，因為尚未獲取 `userId`"}), 400
+
+    # 取得要發送的訊息
     message_text = data.get("message", "未知通知")
 
     # 建立 LINE 訊息
     line_message = {
-        # "to": LINE_USER_ID,
-        "to": LINE_GROUP_ID,
+        "to": latest_user_id,
         "messages": [
-            {"type": "text", "text": message_text}  # 只傳送 message 內容
+            {"type": "text", "text": message_text}
         ]
     }
 
@@ -52,11 +47,8 @@ def webhook():
     }
     response = requests.post(LINE_API_URL, json=line_message, headers=headers)
 
-    return jsonify({"status": "ok", "line_response": response.json()})
+    return jsonify({"status": "ok", "userId": latest_user_id, "line_response": response.json()})
 
-@app.route("/ping", methods=["GET"])
-def ping():
-    return jsonify({"status": "alive"})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
